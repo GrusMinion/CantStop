@@ -193,7 +193,7 @@ class Player:
         
         for val in single_values:
             if not val in options and not val in ignore:
-                if self.positions[val] < self.STEPS_PER_NUMBER[val]:
+                if self.positions[val] < self.STEPS_PER_NUMBER[val] and self.temp_positions[val] < self.STEPS_PER_NUMBER[val]:
                     if self.temp_positions[val] > 0:
                         # the position is already chosen
                         options.append(val)
