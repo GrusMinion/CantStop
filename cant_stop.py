@@ -148,183 +148,122 @@ class Player:
 
 
     def throwdice(self, ignore = []):
-        throws = np.random.random_integers(1,6,4).tolist()
+        throws = np.random.randint(1,6,4).tolist()
         throw_str = "Player '{0}' has thrown ".format(self.name) + ', '.join(map(str,throws[:-1])) + " and {0}".format(throws[-1])
         
         # generate all 2-pair combinations with 4 dice
-        options = [np.sort([throws[0] + throws[1], throws[2] + throws[3]]).tolist(), \
-                np.sort([throws[0] + throws[2], throws[1] + throws[3]]).tolist(), \
-                np.sort([throws[0] + throws[3], throws[1] + throws[2]]).tolist()]
+        options = [list(np.sort([throws[0] + throws[1], throws[2] + throws[3]])), \
+                list(np.sort([throws[0] + throws[2], throws[1] + throws[3]])), \
+                list(np.sort([throws[0] + throws[3], throws[1] + throws[2]]))]
         
         # remove non-unique combinations of throws
-        options = [list(y) for y in set([tuple(x) for x in options])]
+        options = list(set(tuple(sorted(sub)) for sub in options))
+        
+        for key, value in self.temp_positions.items():
+            if value == self.STEPS_PER_NUMBER[key]:
+                ignore.append(key)
         
         num_steps_tempos = np.fromiter(self.temp_positions.values(), dtype = int)
+
         
-        for val in reversed(options):
-            if (val[0] in ignore or val[1] in ignore) and val in options:
-                options.remove(val)
-            elif val[0] == val[1] and self.temp_positions[val[0]] + 1 == self.STEPS_PER_NUMBER[val[0]]:
-                options.remove(val)
-            elif self.temp_positions[val[1]] >= self.STEPS_PER_NUMBER[val[1]]:
-                options.remove(val)
-            elif self.temp_positions[val[0]] >= self.STEPS_PER_NUMBER[val[0]]:
-                options.remove(val)
-            elif self.temp_positions[val[0]] > 0 and self.temp_positions[val[1]] > 0:
-                # both numbers are already selected, continue
-                continue
-            elif self.temp_positions[val[0]] > 0 and sum(num_steps_tempos > 0) < 3:
-                # one number is already selected and there is at least one position left
-                continue
-            elif self.temp_positions[val[1]] > 0 and sum(num_steps_tempos > 0) < 3:
-                # same, other number
-                continue 
-            elif sum(num_steps_tempos > 0) < 2:
-                # there are at least 2 more positions left
-                continue
-            else:
-                # otherwise, remove the value...
-                options.remove(val)
-            
-                
-        # add single values
-        single_values = [throws[0] + throws[1], throws[0] + throws[2], throws[0] + throws[3],\
-                          throws[1] + throws[2], throws[1] + throws[3], throws[2] + throws[3]]
+        single_options = []
         
-        for val in single_values:
-            if not val in options and not val in ignore:
-                if self.positions[val] < self.STEPS_PER_NUMBER[val] and self.temp_positions[val] < self.STEPS_PER_NUMBER[val]:
-                    if self.temp_positions[val] > 0:
-                        # the position is already chosen
-                        options.append(val)
-                    elif sum(num_steps_tempos > 0) < 3:
-                        # there is at least 1 free position
-                        options.append(val)
+        options_copy = options[:]
+        for val in options_copy:
+            if any([x in ignore for x in val]):
+                options.remove(val)
+                for single_val in val:
+                    if not single_val in ignore:
+                        if self.temp_positions[single_val] > 0 or sum(num_steps_tempos > 0) <= 2:
+                            single_options.append([single_val])
+
+        options_copy = options[:]
+        for val in options_copy:
+            if val[0] == val[1]:
+                if self.temp_positions[val[0]] > 0 or sum(num_steps_tempos > 0) <= 2:
+                    if self.temp_positions[val[1]] + 1 == self.STEPS_PER_NUMBER[val[1]]:
+                        options.remove(val)
+                        single_options.append([val[1]])
+                        
+        options_copy = options[:]
+        for val in options_copy:
+            if sum(num_steps_tempos > 0) + sum([self.temp_positions[ind] == 0 for ind in val]) > 3:
+                options.remove(val)
+                if sum(num_steps_tempos > 0) + int(self.temp_positions[val[0]] == 0) <= 3:
+                    single_options.append([val[0]])
+                if sum(num_steps_tempos > 0) + int(self.temp_positions[val[1]] == 0) <= 3:   
+                    single_options.append([val[1]])
+
+        for single_val in single_options:
+            options.append(single_val)      
+        
+        options = list(set(tuple(sorted(sub)) for sub in options))
         
         return options, throw_str
     
-    def calc_chance_per(self, val_s, ignore):
+    def calc_chance_after(self, choice, ignore):
         num_steps_tempos = np.fromiter(self.temp_positions.values(), dtype = int)
-        
-        chance_after = dict()
-        for val in val_s:
-            if isinstance(val, list):
-                viable_numbers = val[:]
-                nums = len(val)
-            else:
-                viable_numbers = [val]
-                nums = 1
-            for key in self.temp_positions:
-                if key not in ignore and key not in viable_numbers:
-                    if self.temp_positions[key] > 0:
-                        if self.temp_positions[key] < self.STEPS_PER_NUMBER[key]:
-                            viable_numbers.append(key)
-                    elif sum(num_steps_tempos > 0) < 4 - nums:
+
+        viable_numbers = choice[:]
+        for key in self.temp_positions:
+            if key not in ignore and key not in viable_numbers:
+                if self.temp_positions[key] > 0:
+                    if self.temp_positions[key] < self.STEPS_PER_NUMBER[key]:
                         viable_numbers.append(key)
-                        
-            positive_outcomes = 0
-            for throw_options in self.unique_options:
-                for num in viable_numbers:
-                    if num in throw_options:
-                        positive_outcomes += 1
-                        break
-            
-            # 'chance_after' gives the chance that you survive another dice-throw
-            # if you choose to now take a step in a direction of val
-            if isinstance(val, list):
-                chance_after[tuple(val)] = positive_outcomes/len(self.unique_options)
-                if positive_outcomes > len(self.unique_options):
-                    print('something is wrong')
-            else:
-                chance_after[val] = positive_outcomes/len(self.unique_options)
-                if positive_outcomes > len(self.unique_options):
-                    print('something is wrong')
-                        
+                elif sum(num_steps_tempos > 0) + sum([self.temp_positions[i] == 0 for i in choice]) < 3:
+                    viable_numbers.append(key)
+                    
+        positive_outcomes = 0
+        for throw_options in self.unique_options:
+            for num in viable_numbers:
+                if num in throw_options:
+                    positive_outcomes += 1
+                    break
+        
+        chance_after = positive_outcomes/len(self.unique_options)
+        
         return chance_after
     
     
     def AI(self, moves = None, ignore = None):
-        keep_going = False
-        choice = []
-
-        single_vals = [val for val in moves if isinstance(val, int)]
-        double_vals = [val for val in moves if isinstance(val, list)]
-        
+  
         num_steps_tempos = np.fromiter(self.temp_positions.values(), dtype = int)
+        
+        # average expected throws remaining for each move option
+        avg_E_throws = dict()
+        for val in moves:
+            avg_E_throws[tuple(val)] = 0
+            for sing_val in val:
+                steps_remain = self.STEPS_PER_NUMBER[sing_val] - max(self.temp_positions[sing_val], self.positions[sing_val])
+                steps_per_throw = self.expected_num_per_throw[sing_val]
+                avg_E_throws[tuple(val)] += (steps_remain/steps_per_throw)/len(val)
 
-        expected_throws_remaining = dict()
-        for val in self.temp_positions:
-            steps_remain = self.STEPS_PER_NUMBER[val] - max(self.temp_positions[val], self.positions[val])
-            steps_per_throw = self.expected_num_per_throw[val]
-            expected_throws_remaining[val] = steps_remain/steps_per_throw
+        choice = list(min(avg_E_throws, key=avg_E_throws.get))
+        chance_after = self.calc_chance_after(choice, ignore)
         
-        first_val = 0
-        throws_for_val = max(expected_throws_remaining.values())
-        for key in self.temp_positions:
-            if expected_throws_remaining[key] <= throws_for_val and key in single_vals:
-                temp = key
-                if expected_throws_remaining[key] > 0:
-                    first_val = key
-                    throws_for_val = expected_throws_remaining[key]
+        num_victories = sum([max(self.temp_positions[key], self.positions[key]) == self.STEPS_PER_NUMBER[key] for key in self.positions])
         
-        if first_val == 0:
-            first_val = temp
-            print('something is wrong')
+        if len(choice) > 1:
+            if choice[0] == choice[1]:
+                key = choice[0]
+                num_victories += int(max(self.temp_positions[key], self.positions[key]) + 2 == self.STEPS_PER_NUMBER[key])
+                
+        for key in choice:
+            num_victories += int(max(self.temp_positions[key], self.positions[key]) + 1 == self.STEPS_PER_NUMBER[key])
         
-        if double_vals:
-            for val in double_vals:
-                if val[0] == val[1]:
-                    steps_remain = self.STEPS_PER_NUMBER[val[0]] - self.temp_positions[val[0]] - 1
-                    steps_per_throw = self.expected_num_per_throw[val[0]]
-                    expected_throws_remaining[val[0]] = steps_remain/steps_per_throw
-            
-            max_required_throws = 0
-            for val in self.temp_positions:
-                if (self.temp_positions[val] > 0 or self.positions[val] > 0) and \
-                    expected_throws_remaining[val] > max_required_throws:
-                        max_required_throws = expected_throws_remaining[val]
-            
-            for val in double_vals:
-                if not choice:
-                    if (val[0] == first_val and self.temp_positions[val[1]] > 0) or \
-                    (val[1] == first_val and self.temp_positions[val[0]] > 0):
-                        choice = val
-                if val[0] == first_val and expected_throws_remaining[val[1]] < max_required_throws:
-                    choice = val
-                elif val[1] == first_val and expected_throws_remaining[val[0]] < max_required_throws:
-                    choice = val
-        
-        if single_vals:
-            all_options = single_vals[:]
-        else:
-            all_options = []
-        if choice:
-            all_options.append(choice)
-            
-        chance_after = self.calc_chance_per(all_options, ignore)
-        
-        if not choice:
-            choice = first_val
-            num_steps = 1
-            if not chance_after[choice] == 1:
-                expected_remaining_steps = 1/(1-chance_after[choice])
-            else:
-                keep_going = True
-        else:
-            if not chance_after[tuple(choice)] == 1:
-                expected_remaining_steps = 1/(1-chance_after[tuple(choice)])
-            else:
-                keep_going = True
-            num_steps = 2
-        
-        current_pos = np.fromiter(self.positions.values(), dtype = int)
-        num_temp_steps = sum(num_steps_tempos) - sum(current_pos[num_steps_tempos > 0])
-        if keep_going:
+        if chance_after == 1:
             keep_going = True
-        elif num_temp_steps + num_steps > expected_remaining_steps:
+        elif num_victories >= 3:
             keep_going = False
         else:
-            keep_going = True
+            current_pos = np.fromiter(self.positions.values(), dtype = int)
+            num_temp_steps = sum(num_steps_tempos) - sum(current_pos[num_steps_tempos > 0])
+            num_current_steps = len(choice)
+            expected_remaining_steps = 1/(1-chance_after)
+            if num_temp_steps + num_current_steps > expected_remaining_steps:
+                keep_going = False
+            else:
+                keep_going = True
         
         return choice, keep_going
-        
+
