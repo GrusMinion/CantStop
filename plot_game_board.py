@@ -48,7 +48,7 @@ class PlotBoard:
             alt.X('x_vals',scale = alt.Scale(domain=(-1/13, 14/13))),y='y_vals')
 
         self.base_chart = (line_chart + point_chart).properties(width=800,height=700)
-        self.plot_chart = self.base_chart.configure(background='#000000')
+        self.plot_chart = self.base_chart.configure(background='#FFFFFF')
         self.plot_chart.configure_view(strokeWidth=0).configure_axis(grid=False, domain=False)
         
                 
