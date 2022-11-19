@@ -30,10 +30,6 @@ def render_page():
         random_player = random.choice(st.session_state.players)
         st.session_state.current_ind = st.session_state.players.index(random_player)
         st.session_state.end_turn = False
-    elif st.session_state.end_turn:
-        st.session_state.current_ind = (st.session_state.current_ind + 1) % len(st.session_state.players)
-        st.session_state.end_turn = False
-        st.session_state.dice_thrown = False
         
     if not 'board_placeholder' in st.session_state:
         st.session_state.board_placeholder = st.empty()
@@ -59,17 +55,19 @@ def render_page():
             st.markdown('''The current player is {0}'''.format(current_player_name))
             with st.columns([1/2,3,1/2])[1]:
                 st.session_state.board_fig = PlotBoard()
+                st.altair_chart(st.session_state.board_fig.plot_chart, use_container_width=True)
     else:
         update_game_board()
         
     if st.session_state.players[st.session_state.current_ind].name == 'Computer':
-        while not st.session_state.end_turn:
+        while not st.session_state.end_turn and not st.session_state.victory:
             throw_dice()
-            update_game_board()
-            if st.session_state.end_turn:
-                st.session_state.dice_thrown = True
-                if st.button("Next player"):
-                    continue
+            if not st.session_state.players[st.session_state.current_ind].name == 'Computer':
+                update_game_board()
+                break
+            # if st.session_state.end_turn and st.button("Next player"):
+            #     st.session_state.dice_thrown = True
+
     
     with st.session_state.rolldice_placeholder.container():
         st.button('Roll dice', on_click = throw_dice, disabled = st.session_state.dice_thrown)
@@ -89,8 +87,11 @@ def throw_dice():
         st.write(dice_roll_text)
         if not options:
             st.write('''This dice roll does not allow any combinations... {0} is dead'''.format(player.name))
+            time.sleep(1)
+            # st.session_state.end_turn = True
             st.session_state.players[st.session_state.current_ind].moveposition(failed = True)
-            st.session_state.end_turn = True
+            next_player()
+
         elif player.name == 'Computer' and options:
             choice, keep_going = player.AI(moves = options, ignore = st.session_state.ignore_list)
             st.write('''Computer chooses steps {0}'''.format(choice))
@@ -100,6 +101,8 @@ def throw_dice():
             if not keep_going:
                 end_turn()
         else:
+            for opt in options:
+                print(opt)
             cols = st.columns(len(options))
             for ind, option in enumerate(options):
                 with cols[ind]:
@@ -129,6 +132,8 @@ def end_turn():
 
     update_game_board()
     check_victory()
+    if not st.session_state.victory:
+        next_player()
         
 def update_game_board():
     with st.session_state.board_placeholder.container():
@@ -136,7 +141,13 @@ def update_game_board():
         st.markdown('''The current player is {0}'''.format(current_player_name))
         with st.columns([1/2,3,1/2])[1]:
             st.session_state.board_fig.plot_players(st.session_state.players)
-            st.pyplot(st.session_state.board_fig.fig)
+            st.altair_chart(st.session_state.board_fig.plot_chart, use_container_width=True)            
+            # st.pyplot(st.session_state.board_fig.fig)
+
+def next_player():
+    st.session_state.current_ind = (st.session_state.current_ind + 1) % len(st.session_state.players)
+    st.session_state.end_turn = False
+    st.session_state.dice_thrown = False
             
 def check_victory():
     for player in st.session_state.players:
@@ -144,7 +155,7 @@ def check_victory():
         for key in player.positions:
             if player.positions[key] == player.STEPS_PER_NUMBER[key]:
                 count += 1
-            if count == 3:
+            if count >= 3:
                 st.session_state.victory = True
                 st.session_state.winner = player.name
         
