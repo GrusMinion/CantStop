@@ -80,5 +80,5 @@ class PlotBoard:
             new_chart += alt.Chart(scatter_points).mark_circle(filled=True, size = 160, color = '#ffffff').encode(x='x_vals',y='y_vals')
 
         
-        self.plot_chart = (self.base_chart + new_chart).configure(background='#000000')
+        self.plot_chart = (self.base_chart + new_chart).configure(background='#FFFFFF')
         self.plot_chart.configure_view(strokeWidth=0).configure_axis(grid=False, domain=False)
